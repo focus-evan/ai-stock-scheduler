@@ -6,29 +6,12 @@ services:
     image: ai-stock-scheduler:latest
     container_name: ai-stock-scheduler
     restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 1G
+    mem_limit: 2g
     env_file:
       - .env
     environment:
       TZ: Asia/Shanghai
     volumes:
       - ./logs:/srv/app/logs
-      # 开发环境挂载代码
-      - ./app:/srv/app/app:ro
     ports:
       - "8001:8001"
-    # 如果 MySQL/Redis 也在同一台 ECS，使用 host 网络
-    # network_mode: host
-    networks:
-      - scheduler-net
-
-networks:
-  scheduler-net:
-    driver: bridge
