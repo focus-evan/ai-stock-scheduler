@@ -277,8 +277,12 @@ class StockDataFetcher:
             # 港股: 通过新浪港股实时行情 API
             metrics = self._get_hk_realtime_metrics(stock_code)
         else:
-            # A股: 通过 market_data_provider 获取全市场行情中的该股数据
-            try:
+            # A股: 先尝试新浪A股实时单股接口（最快，不封锁）
+            metrics = self._get_a_realtime_metrics(stock_code)
+            
+            # 若失败则 fallback 到全市场行情
+            if not metrics:
+                try:
                 try:
                     from market_data_provider import get_realtime_quotes
                 except ImportError:
@@ -316,8 +320,8 @@ class StockDataFetcher:
 
                         logger.info("Key metrics from realtime quotes", stock_code=stock_code,
                                    pe=metrics.get("pe_ttm"), pb=metrics.get("pb"))
-            except Exception as e:
-                logger.warning("market_data_provider failed for key metrics", error=str(e))
+                except Exception as e:
+                    logger.warning("market_data_provider failed for key metrics", error=str(e))
 
         # A股补充: 尝试 akshare stock_individual_info_em
         if market == "a" and not metrics.get("industry") and self.ak:
@@ -340,6 +344,50 @@ class StockDataFetcher:
                 logger.debug("stock_individual_info_em failed (expected in Docker)", error=str(e))
 
         return metrics if metrics else None
+
+    def _get_a_realtime_metrics(self, stock_code: str) -> Dict[str, Any]:
+        """通过新浪 A 股实时行情 API 快速获取单股指标"""
+        metrics = {}
+        try:
+            sina_code = f"sh{stock_code}" if stock_code.startswith(('6', '9')) else f"sz{stock_code}"
+            url = f"https://hq.sinajs.cn/list={sina_code}"
+            headers = {
+                "User-Agent": random.choice(_UA_LIST),
+                "Referer": "https://finance.sina.com.cn/",
+            }
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=5, context=_SSL_CTX) as resp:
+                raw = resp.read().decode("gbk")
+
+            if '="' not in raw or raw.strip().endswith('="";'):
+                return metrics
+
+            content = raw.split('="')[1].rstrip('";\n')
+            fields = content.split(',')
+
+            if len(fields) >= 10:
+                open_price = float(fields[1])
+                prev_close = float(fields[2])
+                current_price = float(fields[3])
+                high = float(fields[4])
+                low = float(fields[5])
+                volume = float(fields[8])
+                amount = float(fields[9])
+                
+                if prev_close > 0:
+                    change_pct = (current_price - prev_close) / prev_close * 100
+                    metrics["current_price"] = round(current_price, 3)
+                    metrics["change_pct"] = round(change_pct, 2)
+                    metrics["prev_close"] = round(prev_close, 3)
+                    metrics["open"] = open_price
+                    metrics["high"] = high
+                    metrics["low"] = low
+                    metrics["volume"] = volume
+                    metrics["amount"] = amount
+                    logger.info("A-share realtime metrics fetched fast", stock_code=stock_code, price=current_price)
+        except Exception as e:
+            logger.warning("A-share realtime fast API failed", stock_code=stock_code, error=str(e))
+        return metrics
 
     def _get_hk_realtime_metrics(self, stock_code: str) -> Dict[str, Any]:
         """通过新浪港股实时行情 API 获取港股指标"""
