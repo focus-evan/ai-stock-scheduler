@@ -3,19 +3,19 @@
 
 实现北向资金跟踪战法的核心模块：
 1. 获取北向资金（沪深港通）流向数据
-2. 获取多日排行数据（今�?3�?5�?10日）判断增持连续�?
+2. 获取多日排行数据（今日/3日/5日/10日）判断增持连续性
 3. 识别外资连续大额净买入个股
-4. 逆势加仓信号检�?
+4. 逆势加仓信号检测
 5. 持仓占比变化趋势分析
-6. 综合打分排序（七维度评分�?
+6. 综合打分排序（七维度评分）
 7. GPT 深度分析增强
 
-数据源：AkShare（stock_hsgt_hold_stock_em / stock_individual_fund_flow_rank�?
+数据源：AkShare（stock_hsgt_hold_stock_em / stock_individual_fund_flow_rank）
 
 优化点：
-- 多周期排行对比（今日+5�?10日）判断持仓变化速度
+- 多周期排行对比（今日+5日+10日）判断持仓变化速度
 - 连续增持天数估算（通过多周期占比对比）
-- 持仓加�?减速指�?
+- 持仓加速/减速指标
 """
 
 import asyncio
@@ -36,7 +36,7 @@ logger = structlog.get_logger()
 
 
 class NorthboundStrategy:
-    """北向资金跟踪战法核心策略�?""
+    """北向资金跟踪战法核心策略类"""
 
     def __init__(self):
         self._ak = None
@@ -61,10 +61,10 @@ class NorthboundStrategy:
         获取北向资金跟踪推荐列表
 
         流程:
-        1. 获取北向资金个股持仓排名（今�?5�?10日多周期�?
-        2. 获取资金流向排名（大单净流入�?
-        3. 获取实时行情验证（涨跌幅、活跃度�?
-        4. 综合评分排序（七维度�?
+        1. 获取北向资金个股持仓排名（今日+5日+10日多周期）
+        2. 获取资金流向排名（大单净流入）
+        3. 获取实时行情验证（涨跌幅、活跃度）
+        4. 综合评分排序（七维度）
         5. GPT 深度分析增强
         """
         cache_key = f"northbound_{limit}"
@@ -78,11 +78,11 @@ class NorthboundStrategy:
             # 步骤1: 获取北向资金持仓数据（今日）
             hold_data = await loop.run_in_executor(None, self._get_northbound_holdings)
 
-            # 步骤1b: 获取5日排行数据（用于判断连续增持趋势�?
-            hold_5d = await loop.run_in_executor(None, self._get_northbound_holdings_period, "5日排�?)
+            # 步骤1b: 获取5日排行数据（用于判断连续增持趋势）
+            hold_5d = await loop.run_in_executor(None, self._get_northbound_holdings_period, "5日排行")
 
-            # 步骤1c: 获取10日排行数据（用于判断中期趋势�?
-            hold_10d = await loop.run_in_executor(None, self._get_northbound_holdings_period, "10日排�?)
+            # 步骤1c: 获取10日排行数据（用于判断中期趋势）
+            hold_10d = await loop.run_in_executor(None, self._get_northbound_holdings_period, "10日排行")
 
             # 步骤2: 获取个股资金流向
             flow_data = await loop.run_in_executor(None, self._get_fund_flow_rank)
@@ -133,7 +133,7 @@ class NorthboundStrategy:
             raise
 
     def _get_realtime_data(self) -> pd.DataFrame:
-        """获取A股实时行�?""
+        """获取A股实时行情"""
         try:
             try:
                 from market_data_provider import get_realtime_quotes
@@ -145,7 +145,7 @@ class NorthboundStrategy:
             return pd.DataFrame()
 
     def _get_northbound_holdings(self) -> pd.DataFrame:
-        """获取北向资金持仓排名（沪深港通持�?- 今日�?""
+        """获取北向资金持仓排名（沪深港通持股 - 今日）"""
         # 1. 优先尝试 akshare 本地
         try:
             anti_scrape_delay("nb_hold", *DELAY_NORMAL)
@@ -160,10 +160,10 @@ class NorthboundStrategy:
                 except Exception:
                     continue
 
-            # 降级：尝试获取沪股�?
+            # 降级：尝试获取沪股通
             try:
                 df = self.ak.stock_hsgt_hold_stock_em(
-                    market="沪股�?, indicator="今日排行"
+                    market="沪股通", indicator="今日排行"
                 )
                 if df is not None and not df.empty:
                     return df
@@ -172,7 +172,7 @@ class NorthboundStrategy:
         except Exception as e:
             logger.warning("Local northbound holdings failed", error=str(e))
 
-        # 2. 降级�?gateway
+        # 2. 降级到 gateway
         if get_gateway_url():
             try:
                 for indicator in ["今日排行", "持股排行"]:
@@ -194,7 +194,7 @@ class NorthboundStrategy:
         return pd.DataFrame()
 
     def _get_northbound_holdings_period(self, indicator: str) -> pd.DataFrame:
-        """获取北向资金多日排行�?�?10日），用于判断连续增持趋�?""
+        """获取北向资金多日排行（5日/10日），用于判断连续增持趋势"""
         # 1. 本地
         try:
             anti_scrape_delay(f"nb_hold_{indicator}", *DELAY_LIGHT)
@@ -224,7 +224,7 @@ class NorthboundStrategy:
         return pd.DataFrame()
 
     def _get_fund_flow_rank(self) -> pd.DataFrame:
-        """获取个股资金流向排名（大�?超大单净流入�?""
+        """获取个股资金流向排名（大单/超大单净流入）"""
         # 1. 本地
         try:
             anti_scrape_delay("nb_flow", *DELAY_NORMAL)
@@ -269,13 +269,13 @@ class NorthboundStrategy:
                 h_map[col] = 'code'; mapped.add('code')
             elif '名称' in col_lower and 'name' not in mapped:
                 h_map[col] = 'name'; mapped.add('name')
-            elif ('持股数量' in col_lower or '持股�? in col_lower) and 'hold_shares' not in mapped:
+            elif ('持股数量' in col_lower or '持股数' in col_lower) and 'hold_shares' not in mapped:
                 h_map[col] = 'hold_shares'; mapped.add('hold_shares')
-            elif '持股市�? in col_lower and 'hold_value' not in mapped:
+            elif '持股市值' in col_lower and 'hold_value' not in mapped:
                 h_map[col] = 'hold_value'; mapped.add('hold_value')
-            elif ('占流�? in col_lower or '占A�? in col_lower) and 'hold_ratio' not in mapped:
+            elif ('占流通' in col_lower or '占A股' in col_lower) and 'hold_ratio' not in mapped:
                 h_map[col] = 'hold_ratio'; mapped.add('hold_ratio')
-            elif ('日增�? in col_lower or '增持' in col_lower) and 'increase' not in mapped:
+            elif ('日增持' in col_lower or '增持' in col_lower) and 'increase' not in mapped:
                 h_map[col] = 'increase'; mapped.add('increase')
         df = df.rename(columns=h_map)
         # 重命名后再去一次重复列
@@ -284,7 +284,7 @@ class NorthboundStrategy:
         for col in ['hold_shares', 'hold_value', 'hold_ratio', 'increase']:
             if col in df.columns:
                 data = df[col]
-                # 双保险：如果仍然�?DataFrame，取第一�?
+                # 双保险：如果仍然是 DataFrame，取第一列
                 if isinstance(data, pd.DataFrame):
                     data = data.iloc[:, 0]
                 df[col] = pd.to_numeric(data, errors='coerce')
@@ -306,10 +306,10 @@ class NorthboundStrategy:
                           hold_5d_df: pd.DataFrame, hold_10d_df: pd.DataFrame,
                           flow_df: pd.DataFrame,
                           realtime_df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """合并今日/5�?10日持仓、资金流向、实时行情数据，七维度评�?""
+        """合并今日/5日/10日持仓、资金流向、实时行情数据，七维度评分"""
         results = []
 
-        # 标准化实时行�?
+        # 标准化实时行情
         rt_map = {}
         if not realtime_df.empty:
             for col in realtime_df.columns:
@@ -317,17 +317,17 @@ class NorthboundStrategy:
                     rt_map[col] = 'code'
                 elif '名称' in col:
                     rt_map[col] = 'name'
-                elif '涨跌�? in col:
+                elif '涨跌幅' in col:
                     rt_map[col] = 'change_pct'
                 elif ('最新价' in col or '收盘' in col):
                     rt_map[col] = 'price'
-                elif '成交�? in col:
+                elif '成交额' in col:
                     rt_map[col] = 'amount'
-                elif '总市�? in col:
+                elif '总市值' in col:
                     rt_map[col] = 'total_market_cap'
-                elif '流通市�? in col:
+                elif '流通市值' in col:
                     rt_map[col] = 'float_market_cap'
-                elif '换手�? in col:
+                elif '换手率' in col:
                     rt_map[col] = 'turnover_rate'
             realtime_df = realtime_df.rename(columns=rt_map)
             realtime_df = realtime_df.loc[:, ~realtime_df.columns.duplicated(keep='first')]
@@ -346,7 +346,7 @@ class NorthboundStrategy:
                 if code:
                     rt_dict[code] = row
 
-        # 标准化各期北向持仓数�?
+        # 标准化各期北向持仓数据
         hold_dict = self._normalize_hold_df(hold_df)
         hold_5d_dict = self._normalize_hold_df(hold_5d_df)
         hold_10d_dict = self._normalize_hold_df(hold_10d_df)
@@ -363,13 +363,13 @@ class NorthboundStrategy:
                     f_map[col] = 'code'; mapped.add('code')
                 elif '名称' in col_lower and 'name' not in mapped:
                     f_map[col] = 'name'; mapped.add('name')
-                elif '主力净流入' in col_lower and '净�? in col_lower and 'main_net_inflow' not in mapped:
+                elif '主力净流入' in col_lower and '净额' in col_lower and 'main_net_inflow' not in mapped:
                     f_map[col] = 'main_net_inflow'; mapped.add('main_net_inflow')
-                elif '超大单净流入' in col_lower and '净�? in col_lower and 'super_large_net' not in mapped:
+                elif '超大单净流入' in col_lower and '净额' in col_lower and 'super_large_net' not in mapped:
                     f_map[col] = 'super_large_net'; mapped.add('super_large_net')
-                elif '大单净流入' in col_lower and '净�? in col_lower and 'large_net' not in mapped:
+                elif '大单净流入' in col_lower and '净额' in col_lower and 'large_net' not in mapped:
                     f_map[col] = 'large_net'; mapped.add('large_net')
-                elif '涨跌�? in col_lower and 'change_pct_flow' not in mapped:
+                elif '涨跌幅' in col_lower and 'change_pct_flow' not in mapped:
                     f_map[col] = 'change_pct_flow'; mapped.add('change_pct_flow')
             flow_df = flow_df.rename(columns=f_map)
             flow_df = flow_df.loc[:, ~flow_df.columns.duplicated(keep='first')]
@@ -431,33 +431,33 @@ class NorthboundStrategy:
                 hold_ratio = hold_info.get('hold_ratio', 0.0)
                 increase = hold_info.get('increase', 0.0)
 
-                # 多周期持仓变化（连续增持分析�?
+                # 多周期持仓变化（连续增持分析）
                 hold_ratio_5d = hold_5d_info.get('hold_ratio', 0.0)
                 increase_5d = hold_5d_info.get('increase', 0.0)
                 hold_ratio_10d = hold_10d_info.get('hold_ratio', 0.0)
                 increase_10d = hold_10d_info.get('increase', 0.0)
 
-                # 计算持仓加速度（占比变化速度�?
+                # 计算持仓加速度（占比变化速度）
                 # ratio_change = 今日占比 - 5日前占比 -> 占比增量
                 ratio_change_5d = hold_ratio - hold_ratio_5d if hold_ratio_5d > 0 else 0
                 ratio_change_10d = hold_ratio - hold_ratio_10d if hold_ratio_10d > 0 else 0
 
-                # 判断连续增持天数（近似）�?
-                # 今日增持>0 + 5日累计增�?0 + 10日累计增�?0 �?近似判断连续�?
+                # 判断连续增持天数（近似）：
+                # 今日增持>0 + 5日累计增持>0 + 10日累计增持>0 → 近似判断连续性
                 consecutive_days = 0
                 if increase > 0:
                     consecutive_days = 1
                     if increase_5d > 0:
-                        consecutive_days = 3  # 5日排行有增持，近似连�?�?
+                        consecutive_days = 3  # 5日排行有增持，近似连续3天
                         if increase_10d > 0 and increase_10d > increase_5d:
                             consecutive_days = 5  # 10日内一直在增持
 
-                # 判断是否加速增�?
+                # 判断是否加速增持
                 is_accelerating = False
                 if ratio_change_5d > 0 and ratio_change_10d > 0:
-                    # �?日增�?> �?日增�?= 加�?
-                    recent_rate = ratio_change_5d  # �?日变�?
-                    earlier_rate = ratio_change_10d - ratio_change_5d  # �?日变�?
+                    # 近5日增速 > 前5日增速 = 加速
+                    recent_rate = ratio_change_5d  # 近5日变化
+                    earlier_rate = ratio_change_10d - ratio_change_5d  # 前5日变化
                     is_accelerating = recent_rate > earlier_rate and recent_rate > 0
 
                 # 资金流向指标
@@ -472,7 +472,7 @@ class NorthboundStrategy:
 
                 # ===== 七维度百分制评分 =====
 
-                # 1. 北向持仓分（25分）：持股占比越高越�?
+                # 1. 北向持仓分（25分）：持股占比越高越好
                 hold_score = 0
                 if in_northbound:
                     if hold_ratio >= 10:
@@ -510,7 +510,7 @@ class NorthboundStrategy:
                 elif consecutive_days >= 1:
                     consecutive_score = 6
 
-                # 4. 持仓变化趋势分（10分）：加速增�?vs 减�?
+                # 4. 持仓变化趋势分（10分）：加速增持 vs 减速
                 trend_score = 0
                 if is_accelerating:
                     trend_score = 10
@@ -519,7 +519,7 @@ class NorthboundStrategy:
                 elif ratio_change_5d == 0 and hold_ratio > 0:
                     trend_score = 3  # 持平
                 elif ratio_change_5d < 0:
-                    trend_score = -3  # 占比在下�?
+                    trend_score = -3  # 占比在下降
 
                 # 5. 主力资金分（15分）：主力净流入
                 capital_score = 0
@@ -538,7 +538,7 @@ class NorthboundStrategy:
                 # 6. 市场表现分（10分）：涨跌幅与活跃度
                 market_score = 0
                 if 0 <= change_pct <= 5:
-                    market_score = 10  # 温和上涨最�?
+                    market_score = 10  # 温和上涨最佳
                 elif 5 < change_pct < 9.8:
                     market_score = 8
                 elif -2 <= change_pct < 0:
@@ -548,12 +548,12 @@ class NorthboundStrategy:
                 else:
                     market_score = 2
 
-                # 7. 逆势加仓分（10分）：大盘跌但北向加�?
+                # 7. 逆势加仓分（10分）：大盘跌但北向加仓
                 contrarian_score = 0
                 if change_pct < 0 and increase > 0:
                     contrarian_score = 10
                     if consecutive_days >= 3:
-                        contrarian_score = 10  # 连续逆势加仓，满�?
+                        contrarian_score = 10  # 连续逆势加仓，满分
                 elif change_pct < -1 and main_net_inflow > 1e8:
                     contrarian_score = 7
 
@@ -562,7 +562,7 @@ class NorthboundStrategy:
                     trend_score + capital_score + market_score + contrarian_score
                 ))
 
-                # 过滤条件：至少在北向持仓 �?主力净流入>5000�?
+                # 过滤条件：至少在北向持仓 或 主力净流入>5000万
                 if not in_northbound and main_net_inflow < 5e7:
                     continue
 
@@ -609,7 +609,7 @@ class NorthboundStrategy:
                 logger.warning("Failed to process northbound stock", code=code, error=str(e))
                 continue
 
-        # 按评分排�?
+        # 按评分排序
         results.sort(key=lambda x: x["northbound_score"], reverse=True)
         for idx, stock in enumerate(results):
             stock["rank"] = idx + 1
@@ -630,31 +630,31 @@ class NorthboundStrategy:
                 if inc >= 1e6:
                     reasons.append(f"今日增持 {inc / 1e4:.0f}万股")
                 else:
-                    reasons.append(f"今日增持 {inc:.0f}�?)
+                    reasons.append(f"今日增持 {inc:.0f}股")
             elif stock.get("increase", 0) < 0:
                 reasons.append("⚠️ 今日减持")
 
             # 连续增持信号
             cd = stock.get("consecutive_days", 0)
             if cd >= 5:
-                reasons.append(f"🔥 连续增持约{cd}�?)
+                reasons.append(f"🔥 连续增持约{cd}天")
             elif cd >= 3:
-                reasons.append(f"📈 近期连续增持{cd}�?)
+                reasons.append(f"📈 近期连续增持{cd}天")
 
-            # 持仓加速信�?
+            # 持仓加速信号
             if stock.get("is_accelerating"):
-                reasons.append("�?增持加速中")
+                reasons.append("⚡ 增持加速中")
             elif stock.get("ratio_change_5d", 0) > 0:
-                reasons.append(f"�?日占�?{stock['ratio_change_5d']:.3f}%")
+                reasons.append(f"近5日占比+{stock['ratio_change_5d']:.3f}%")
             elif stock.get("ratio_change_5d", 0) < 0:
-                reasons.append(f"⚠️ �?日占比{stock['ratio_change_5d']:.3f}%")
+                reasons.append(f"⚠️ 近5日占比{stock['ratio_change_5d']:.3f}%")
 
             if stock.get("main_net_inflow", 0) > 0:
                 inflow = stock["main_net_inflow"]
                 if inflow >= 1e8:
-                    reasons.append(f"主力净流入 {inflow / 1e8:.2f}�?)
+                    reasons.append(f"主力净流入 {inflow / 1e8:.2f}亿")
                 else:
-                    reasons.append(f"主力净流入 {inflow / 1e4:.0f}�?)
+                    reasons.append(f"主力净流入 {inflow / 1e4:.0f}万")
             if stock.get("is_contrarian"):
                 reasons.append("🔥 逆势加仓信号")
 
@@ -701,23 +701,23 @@ class NorthboundStrategy:
         accelerating = sum(1 for s in stocks if s.get("is_accelerating"))
         avg_score = sum(s.get("northbound_score", 0) for s in stocks) / max(total, 1)
         top5 = stocks[:5]
-        top_names = "�?.join(s.get("name", "?") for s in top5)
+        top_names = "、".join(s.get("name", "?") for s in top5)
 
         return (
             f"## 北向资金跟踪报告\n\n"
-            f"筛选到 **{total}** 只北向资金关注股，平均评�?**{avg_score:.0f}**分，其中：\n"
-            f"- 北向持仓�? {nb_count} 只\n"
+            f"筛选到 **{total}** 只北向资金关注股，平均评分 **{avg_score:.0f}**分，其中：\n"
+            f"- 北向持仓股: {nb_count} 只\n"
             f"- 🔥逆势加仓: {contrarian} 只\n"
-            f"- 📈连续增持(�?�?: {consecutive} 只\n"
-            f"- ⚡增持加�? {accelerating} 只\n\n"
+            f"- 📈连续增持(≥3日): {consecutive} 只\n"
+            f"- ⚡增持加速: {accelerating} 只\n\n"
             f"### Top 5 推荐\n{top_names}\n\n"
             f"### 核心逻辑\n"
-            f"北向资金（沪深港通）被视为\"聪明钱\"。本战法采用七维度评�?
-            f"（持�?5+今日增持15+连续增持15+持仓趋势10+主力资金15+市场10+逆势10），"
-            f"重点关注**连续增持**�?*增持加�?*信号�?
-            f"连续3日以上增�?主力资金流入双共振的个股胜率最高。\n\n"
+            f"北向资金（沪深港通）被视为\"聪明钱\"。本战法采用七维度评分"
+            f"（持仓25+今日增持15+连续增持15+持仓趋势10+主力资金15+市场10+逆势10），"
+            f"重点关注**连续增持**和**增持加速**信号，"
+            f"连续3日以上增持+主力资金流入双共振的个股胜率最高。\n\n"
             f"⚠️ **风险提示**: 北向资金可能存在\"假外资\"（内地资金借道香港回流），"
-            f"需结合基本面判断。占比下降的股票应警惕外资撤退风险�?
+            f"需结合基本面判断。占比下降的股票应警惕外资撤退风险。"
         )
 
 

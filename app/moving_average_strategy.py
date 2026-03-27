@@ -4,8 +4,8 @@
 实现均线战法的核心分析：
 1. 均线多头排列 - MA5 > MA10 > MA20 > MA60 向上发散
 2. 金叉信号 - 短期均线上穿长期均线
-3. 回踩支撑 - 强势股回�?0日均线获支撑后反�?
-4. 均线粘合突破 - 多根均线收敛后向上发�?
+3. 回踩支撑 - 强势股回踩20日均线获支撑后反弹
+4. 均线粘合突破 - 多根均线收敛后向上发散
 
 数据源：AkShare
 """
@@ -29,7 +29,7 @@ logger = structlog.get_logger()
 
 
 class MovingAverageStrategy:
-    """均线战法核心策略�?""
+    """均线战法核心策略类"""
 
     def __init__(self):
         self._ak = None
@@ -133,19 +133,19 @@ class MovingAverageStrategy:
                 col_map[col] = 'code'; mapped.add('code')
             elif '名称' in col and 'name' not in mapped:
                 col_map[col] = 'name'; mapped.add('name')
-            elif '涨跌�? in col and 'change_pct' not in mapped:
+            elif '涨跌幅' in col and 'change_pct' not in mapped:
                 col_map[col] = 'change_pct'; mapped.add('change_pct')
             elif ('最新价' in col or '收盘' in col) and 'price' not in mapped:
                 col_map[col] = 'price'; mapped.add('price')
-            elif '成交�? in col and 'amount' not in mapped:
+            elif '成交额' in col and 'amount' not in mapped:
                 col_map[col] = 'amount'; mapped.add('amount')
-            elif '成交�? in col and 'volume' not in mapped:
+            elif '成交量' in col and 'volume' not in mapped:
                 col_map[col] = 'volume'; mapped.add('volume')
-            elif '流通市�? in col and 'float_market_cap' not in mapped:
+            elif '流通市值' in col and 'float_market_cap' not in mapped:
                 col_map[col] = 'float_market_cap'; mapped.add('float_market_cap')
-            elif '总市�? in col and 'total_market_cap' not in mapped:
+            elif '总市值' in col and 'total_market_cap' not in mapped:
                 col_map[col] = 'total_market_cap'; mapped.add('total_market_cap')
-            elif '换手�? in col and 'turnover_rate' not in mapped:
+            elif '换手率' in col and 'turnover_rate' not in mapped:
                 col_map[col] = 'turnover_rate'; mapped.add('turnover_rate')
 
         df = df.rename(columns=col_map)
@@ -163,12 +163,12 @@ class MovingAverageStrategy:
         if 'change_pct' in df.columns:
             mask &= (df['change_pct'] >= 0) & (df['change_pct'] < 9.8)
         if 'amount' in df.columns:
-            mask &= df['amount'] >= 6e7  # 3000万→6000�?
+            mask &= df['amount'] >= 6e7  # 3000万→6000万
         if 'name' in df.columns:
             mask &= ~df['name'].str.contains('ST|N|退', case=False, na=False)
         if 'code' in df.columns:
             mask &= ~df['code'].astype(str).str.startswith('8')
-        # 【新增】市�?20�?
+        # 【新增】市值>20亿
         if 'total_market_cap' in df.columns:
             mask &= (df['total_market_cap'] >= 2e9) | (df['total_market_cap'].isna())
 
@@ -180,7 +180,7 @@ class MovingAverageStrategy:
         return filtered
 
     def _analyze_moving_averages(self, candidates: pd.DataFrame) -> List[Dict[str, Any]]:
-        """分析均线信号（优化版�?""
+        """分析均线信号（优化版）"""
         results = []
         if candidates.empty or 'code' not in candidates.columns:
             return results
@@ -221,11 +221,11 @@ class MovingAverageStrategy:
                 for c in hist.columns:
                     if '收盘' in c and 'close' not in h_mapped:
                         h_col_map[c] = 'close'; h_mapped.add('close')
-                    elif '成交�? in c and 'volume' not in h_mapped:
+                    elif '成交量' in c and 'volume' not in h_mapped:
                         h_col_map[c] = 'volume'; h_mapped.add('volume')
-                    elif '最�? in c and 'high' not in h_mapped:
+                    elif '最高' in c and 'high' not in h_mapped:
                         h_col_map[c] = 'high'; h_mapped.add('high')
-                    elif '最�? in c and 'low' not in h_mapped:
+                    elif '最低' in c and 'low' not in h_mapped:
                         h_col_map[c] = 'low'; h_mapped.add('low')
 
                 hist = hist.rename(columns=h_col_map)
@@ -245,12 +245,12 @@ class MovingAverageStrategy:
                 ma20 = float(np.mean(closes[-20:]))
                 ma60 = float(np.mean(closes[-60:])) if len(closes) >= 60 else float(np.mean(closes))
 
-                # 前一日均线（用于金叉判断�?
+                # 前一日均线（用于金叉判断）
                 prev_ma5 = float(np.mean(closes[-6:-1]))
                 prev_ma10 = float(np.mean(closes[-11:-1]))
                 prev_ma20 = float(np.mean(closes[-21:-1]))
 
-                # 【新增】均线斜率（上升速度�?
+                # 【新增】均线斜率（上升速度）
                 ma20_slope = (ma20 - float(np.mean(closes[-25:-5]))) / float(np.mean(closes[-25:-5])) * 100 if len(closes) >= 25 else 0
                 ma60_slope = (ma60 - float(np.mean(closes[-65:-5]))) / float(np.mean(closes[-65:-5])) * 100 if len(closes) >= 65 else 0
 
@@ -262,12 +262,12 @@ class MovingAverageStrategy:
                     prev_macd_hist = self._calc_macd(closes[:-1])[2]
                     is_macd_just_golden = bool(prev_macd_hist is not None and prev_macd_hist <= 0 and macd_hist > 0)
 
-                # 信号检�?
+                # 信号检测
                 signal_type = ""
                 signal_base_score = 0
 
                 is_bull_aligned = bool(ma5 > ma10 > ma20 > ma60)
-                is_partial_bull = bool(ma5 > ma10 > ma20)  # 不含60�?
+                is_partial_bull = bool(ma5 > ma10 > ma20)  # 不含60日
 
                 # 1. 均线多头排列
                 if is_bull_aligned and current_price > ma5:
@@ -276,13 +276,13 @@ class MovingAverageStrategy:
 
                 # 2. 金叉信号
                 elif prev_ma5 <= prev_ma10 and ma5 > ma10:
-                    signal_type = "5�?10日金�?
+                    signal_type = "5日/10日金叉"
                     signal_base_score = 30
                     if current_price > ma20:
                         signal_base_score += 5
 
                 elif prev_ma5 <= prev_ma20 and ma5 > ma20:
-                    signal_type = "5�?20日金�?
+                    signal_type = "5日/20日金叉"
                     signal_base_score = 28
 
                 # 3. 回踩20日线支撑
@@ -304,7 +304,7 @@ class MovingAverageStrategy:
 
                 # ===== 五维度百分制评分 =====
 
-                # 均线形�?(25%)
+                # 均线形态 (25%)
                 form_score = 0
                 if is_bull_aligned:
                     form_score = 25
@@ -315,7 +315,7 @@ class MovingAverageStrategy:
                 else:
                     form_score = 3
 
-                # 【新增】均线斜率加�?
+                # 【新增】均线斜率加分
                 if ma20_slope > 3:  # 20日线明显上升
                     form_score = min(25, form_score + 3)
 
@@ -420,7 +420,7 @@ class MovingAverageStrategy:
         return round(macd_line, 4), round(macd_signal, 4), round(macd_hist, 4)
 
     def _build_recommendations(self, stocks: List[Dict], limit: int) -> Dict[str, Any]:
-        """构建推荐结果（优化版�?""
+        """构建推荐结果（优化版）"""
         now = datetime.now()
 
         for stock in stocks:
@@ -428,7 +428,7 @@ class MovingAverageStrategy:
             st = stock.get("signal_type", "")
 
             if "多头排列" in st:
-                reasons.append("MA5>MA10>MA20>MA60 多头排列，趋势向�?)
+                reasons.append("MA5>MA10>MA20>MA60 多头排列，趋势向上")
             elif "金叉" in st:
                 reasons.append(f"{st}，短期均线上穿长期均线，买入信号")
             elif "回踩" in st:
@@ -438,14 +438,14 @@ class MovingAverageStrategy:
 
             # 【新增】MACD共振
             if stock.get("is_macd_just_golden"):
-                reasons.append("🟢 MACD刚刚金叉，均�?MACD双重确认")
+                reasons.append("🟢 MACD刚刚金叉，均线+MACD双重确认")
             elif stock.get("is_macd_golden"):
                 reasons.append("MACD在零轴上方，动能为正")
 
-            # 【新增】均线斜�?
+            # 【新增】均线斜率
             slope = stock.get("ma20_slope", 0)
             if slope > 5:
-                reasons.append(f"20日线上升斜率{slope:.1f}%，趋势加�?)
+                reasons.append(f"20日线上升斜率{slope:.1f}%，趋势加速")
             elif slope > 2:
                 reasons.append(f"20日线温和上升{slope:.1f}%")
 
@@ -454,7 +454,7 @@ class MovingAverageStrategy:
                 reasons.append("紧贴20日均线，支撑有效")
 
             if stock.get("vol_ratio", 0) >= 1.5:
-                reasons.append(f"放量配合，量�?{stock.get('vol_ratio', 0):.1f}x")
+                reasons.append(f"放量配合，量比 {stock.get('vol_ratio', 0):.1f}x")
 
             stock["reasons"] = reasons
             score = stock.get("signal_score", 0)
@@ -486,7 +486,7 @@ class MovingAverageStrategy:
         }
 
     def _generate_report(self, stocks: List[Dict]) -> str:
-        """生成策略报告（优化版�?""
+        """生成策略报告（优化版）"""
         total = len(stocks)
         bull = sum(1 for s in stocks if "多头" in s.get("signal_type", ""))
         golden = sum(1 for s in stocks if "金叉" in s.get("signal_type", ""))
@@ -498,18 +498,18 @@ class MovingAverageStrategy:
 
         return (
             f"## 均线战法扫描报告\n\n"
-            f"扫描�?**{total}** 只均线信号股，平均评�?**{avg_score:.0f}**分：\n"
+            f"扫描到 **{total}** 只均线信号股，平均评分 **{avg_score:.0f}**分：\n"
             f"- 📊 多头排列: {bull} 只\n"
-            f"- �?金叉信号: {golden} 只\n"
+            f"- ✨ 金叉信号: {golden} 只\n"
             f"- 🔄 回踩支撑: {pullback} 只\n"
             f"- 🔀 粘合突破: {converge} 只\n"
-            f"- 🟢 MACD共振: {macd_golden} 只（其中刚金�?{macd_just} 只）\n\n"
+            f"- 🟢 MACD共振: {macd_golden} 只（其中刚金叉 {macd_just} 只）\n\n"
             f"### 核心逻辑\n"
-            f"均线是趋势的表征。多头排�?上升趋势明确�?
-            f"金叉=趋势转换起点，回踩均�?低风险介入点�?
+            f"均线是趋势的表征。多头排列=上升趋势明确，"
+            f"金叉=趋势转换起点，回踩均线=低风险介入点，"
             f"粘合突破=方向选择确定。\n"
-            f"配合MACD共振验证（五维度评分：信�?5%+形�?5%+量能15%+MACD15%+筹码10%）\n\n"
-            f"⚠️ **风险提示**: 均线系统有滞后性，需结合MACD共振和量能配合验证�?
+            f"配合MACD共振验证（五维度评分：信号35%+形态25%+量能15%+MACD15%+筹码10%）\n\n"
+            f"⚠️ **风险提示**: 均线系统有滞后性，需结合MACD共振和量能配合验证。"
         )
 
 
