@@ -23,23 +23,29 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+# 3. 检测 docker compose 版本（v1 vs v2）
+if docker compose version &> /dev/null; then
+    DC="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DC="docker-compose"
+else
     echo "[ERROR] Docker Compose 未安装"
     exit 1
 fi
+echo "[INFO] 使用: $DC"
 
-# 3. 创建日志目录
+# 4. 创建日志目录
 mkdir -p logs
 
-# 4. 构建镜像
+# 5. 构建镜像
 echo "[INFO] 构建 Docker 镜像..."
-docker compose build --no-cache
+$DC build
 
-# 5. 启动服务
+# 6. 启动服务
 echo "[INFO] 启动调度服务..."
-docker compose up -d
+$DC up -d
 
-# 6. 检查健康
+# 7. 检查健康
 echo "[INFO] 等待服务启动..."
 sleep 5
 
@@ -49,7 +55,7 @@ if echo "$HEALTH" | grep -q "ok"; then
     echo "$HEALTH"
 else
     echo "[WARNING] 健康检查失败，查看日志："
-    docker compose logs --tail 50
+    $DC logs --tail 50
 fi
 
 echo ""
@@ -58,5 +64,5 @@ echo " 部署完成"
 echo " API 地址: http://$(hostname -I | awk '{print $1}'):8001"
 echo " 健康检查: curl http://localhost:8001/health"
 echo " 任务状态: curl http://localhost:8001/api/scheduler/status"
-echo " 查看日志: docker compose logs -f"
+echo " 查看日志: $DC logs -f"
 echo "=========================================="
