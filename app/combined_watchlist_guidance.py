@@ -222,8 +222,8 @@ class WatchlistGuidanceGenerator:
         if isinstance(strategies, str):
             strategies = json.loads(strategies)
 
-        # 1. 获取实时行情
-        market = await self._fetch_realtime(stock_code)
+        # 1. 获取实时行情（改为深层次的个股详情，而不是整个市场行情）
+        market = await self._fetch_realtime(stock_code, stock_name)
         current_price = market.get("current_price", 0)
         change_pct = market.get("change_pct", 0)
 
@@ -298,35 +298,35 @@ class WatchlistGuidanceGenerator:
         )
         return record_id
 
-    async def _fetch_realtime(self, code: str) -> Dict:
-        """获取单只股票实时行情"""
+    async def _fetch_realtime(self, code: str, stock_name: str) -> Dict:
+        """获取单只股票实时行情及技术指标（深度数据）"""
         try:
-            import asyncio
             try:
-                from market_data_provider import get_realtime_quotes
+                from stock_data_fetcher import stock_data_fetcher, detect_market
             except ImportError:
-                from app.market_data_provider import get_realtime_quotes
-
-            df = await asyncio.to_thread(get_realtime_quotes)
-            if df is None or df.empty:
-                return {}
-
-            for col in df.columns:
-                if "代码" in col:
-                    mask = df[col].astype(str).str.contains(code, na=False)
-                    row = df[mask]
-                    if not row.empty:
-                        r = row.iloc[0]
-                        return {
-                            "current_price": float(r.get("最新价", 0) or 0),
-                            "change_pct": float(r.get("涨跌幅", 0) or 0),
-                            "high": float(r.get("最高", 0) or 0),
-                            "low": float(r.get("最低", 0) or 0),
-                            "open": float(r.get("今开", 0) or 0),
-                            "volume": float(r.get("成交量", 0) or 0),
-                            "amount": float(r.get("成交额", 0) or 0),
-                            "turnover": float(r.get("换手率", 0) or 0),
-                        }
+                from app.stock_data_fetcher import stock_data_fetcher, detect_market
+                
+            market_type = detect_market(code)
+            data = await stock_data_fetcher.fetch_comprehensive_data(code, stock_name, market_type)
+            
+            kline = data.get("kline_analysis") or {}
+            metrics = data.get("key_metrics") or {}
+            
+            # 优先从 metrics 获取，其次 kline
+            current_price = metrics.get("current_price") or kline.get("current_price", 0)
+            change_pct = metrics.get("change_pct") or kline.get("change_pct", 0)
+            
+            return {
+                "current_price": current_price,
+                "change_pct": change_pct,
+                "volume": metrics.get("volume", 0) or kline.get("avg_vol_5", 0),
+                "turnover": metrics.get("turnover_rate", 0),
+                "ma5": kline.get("ma5", 0),
+                "ma10": kline.get("ma10", 0),
+                "ma20": kline.get("ma20", 0),
+                "macd": kline.get("macd"),
+                "rsi": kline.get("rsi_14"),
+            }
         except Exception as e:
             logger.warning("Failed to fetch realtime for watchlist", code=code, error=str(e))
         return {}
@@ -355,11 +355,13 @@ class WatchlistGuidanceGenerator:
 
         price_block = (
             f"现价:{current_price:.2f}元 涨跌:{change_pct:+.2f}% "
-            f"今开:{market.get('open', 0):.2f} 最高:{market.get('high', 0):.2f} "
-            f"最低:{market.get('low', 0):.2f} "
             f"成交量:{market.get('volume', 0):.0f}手 "
-            f"换手率:{market.get('turnover', 0):.2f}%"
-            if current_price > 0 else "实时行情暂不可用"
+            f"换手率:{market.get('turnover', 0):.2f}%\n"
+            f"[技术面] 5日均线:{market.get('ma5', 0):.2f} 10日均线:{market.get('ma10', 0):.2f} "
+            f"20日均线:{market.get('ma20', 0):.2f} "
+            f"MACD:{market.get('macd') or '暂无'} "
+            f"RSI(14):{market.get('rsi') or '暂无'}"
+            if current_price > 0 else "实时行情缺失，请保守预估"
         )
 
         prompt = f"""你正在以"{strategy_name}"视角分析用户持仓股票，请深度结合{strategy_name}的核心逻辑给出操作指导。
