@@ -385,10 +385,10 @@ class PortfolioScheduler:
                 if strategy_type == "dragon_head":
                     if has_trades:
                         # 根据当前时间判断是上午还是下午的交易
-                        if now_time >= DH_TRADE_AM_START:
+                        if now_time >= DH_TRADE_START:
                             self._last_dh_rec_am = today
                             self._last_dh_trade_am = today
-                        if now_time >= DH_TRADE_PM_START:
+                        if now_time >= DH_TRADE_END:
                             self._last_dh_rec_pm = today
                             self._last_dh_trade_pm = today
                     if "morning" in follow_sessions:
@@ -398,10 +398,10 @@ class PortfolioScheduler:
 
                 elif strategy_type == "sentiment":
                     if has_trades:
-                        if now_time >= SE_TRADE_AM_START:
+                        if now_time >= SE_TRADE_START:
                             self._last_se_rec_am = today
                             self._last_se_trade_am = today
-                        if now_time >= SE_TRADE_PM_START:
+                        if now_time >= SE_TRADE_END:
                             self._last_se_rec_pm = today
                             self._last_se_trade_pm = today
                     if "morning" in follow_sessions:
@@ -411,10 +411,10 @@ class PortfolioScheduler:
 
                 elif strategy_type == "event_driven":
                     if has_trades:
-                        if now_time >= ED_TRADE_AM_START:
+                        if now_time >= ED_TRADE_START:
                             self._last_ed_rec_am = today
                             self._last_ed_trade_am = today
-                        if now_time >= ED_TRADE_PM_START:
+                        if now_time >= ED_TRADE_END:
                             self._last_ed_rec_pm = today
                             self._last_ed_trade_pm = today
                     if "morning" in follow_sessions:
@@ -426,9 +426,9 @@ class PortfolioScheduler:
                     # 凌晨预生成的推荐，盘中有交易记录说明预生成已完成
                     if has_trades:
                         self._last_bt_premarket = today
-                        if now_time >= BT_TRADE_AM_START:
+                        if now_time >= BT_TRADE_START:
                             self._last_bt_trade_am = today
-                        if now_time >= BT_TRADE_PM_START:
+                        if now_time >= BT_TRADE_END:
                             self._last_bt_trade_pm = today
                     if "morning" in follow_sessions:
                         self._last_bt_follow_am = today
@@ -438,9 +438,9 @@ class PortfolioScheduler:
                 elif strategy_type == "volume_price":
                     if has_trades:
                         self._last_vp_premarket = today
-                        if now_time >= VP_TRADE_AM_START:
+                        if now_time >= VP_TRADE_START:
                             self._last_vp_trade_am = today
-                        if now_time >= VP_TRADE_PM_START:
+                        if now_time >= VP_TRADE_END:
                             self._last_vp_trade_pm = today
                     if "morning" in follow_sessions:
                         self._last_vp_follow_am = today
@@ -463,9 +463,9 @@ class PortfolioScheduler:
                 elif strategy_type == "moving_average":
                     if has_trades:
                         self._last_ma_premarket = today
-                        if now_time >= MA_TRADE_AM_START:
+                        if now_time >= MA_TRADE_START:
                             self._last_ma_trade_am = today
-                        if now_time >= MA_TRADE_PM_START:
+                        if now_time >= MA_TRADE_END:
                             self._last_ma_trade_pm = today
                     if "morning" in follow_sessions:
                         self._last_ma_follow_am = today
@@ -474,10 +474,10 @@ class PortfolioScheduler:
 
                 elif strategy_type == "combined":
                     if has_trades:
-                        if now_time >= CB_TRADE_AM_START:
+                        if now_time >= CB_TRADE_START:
                             self._last_cb_rec_am = today
                             self._last_cb_trade_am = today
-                        if now_time >= CB_TRADE_PM_START:
+                        if now_time >= CB_TRADE_END:
                             self._last_cb_rec_pm = today
                             self._last_cb_trade_pm = today
                     if "morning" in follow_sessions:
@@ -488,9 +488,9 @@ class PortfolioScheduler:
                 elif strategy_type == "trend_momentum":
                     if has_trades:
                         self._last_tm_premarket = today
-                        if now_time >= TM_TRADE_AM_START:
+                        if now_time >= TM_TRADE_START:
                             self._last_tm_trade_am = today
-                        if now_time >= TM_TRADE_PM_START:
+                        if now_time >= TM_TRADE_END:
                             self._last_tm_trade_pm = today
                     if "morning" in follow_sessions:
                         self._last_tm_follow_am = today
@@ -499,10 +499,10 @@ class PortfolioScheduler:
 
                 elif strategy_type == "northbound":
                     if has_trades:
-                        if now_time >= NB_TRADE_AM_START:
+                        if now_time >= NB_TRADE_START:
                             self._last_nb_rec_am = today
                             self._last_nb_trade_am = today
-                        if now_time >= NB_TRADE_PM_START:
+                        if now_time >= NB_TRADE_END:
                             self._last_nb_rec_pm = today
                             self._last_nb_trade_pm = today
                     if "morning" in follow_sessions:
