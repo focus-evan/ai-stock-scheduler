@@ -249,7 +249,8 @@ class OvernightStrategy:
         if 'name' in df.columns:
             mask &= ~df['name'].str.contains('ST|N|退', case=False, na=False)
         if 'code' in df.columns:
-            mask &= ~df['code'].astype(str).str.startswith('8')
+            valid_prefix = df['code'].astype(str).str.match(r'^(00|30|60)')
+            mask &= valid_prefix
         logger.info("Step exclude (ST/N/退/北交所)", remaining=int(mask.sum()))
 
         filtered = df[mask].copy()

@@ -167,7 +167,9 @@ class MovingAverageStrategy:
         if 'name' in df.columns:
             mask &= ~df['name'].str.contains('ST|N|退', case=False, na=False)
         if 'code' in df.columns:
-            mask &= ~df['code'].astype(str).str.startswith('8')
+            # 过滤北交所(8/9/4开头)，只保留沪深主板+创业板(00/30/60开头)
+            valid_prefix = df['code'].astype(str).str.match(r'^(00|30|60)')
+            mask &= valid_prefix
         # 【新增】市值>20亿
         if 'total_market_cap' in df.columns:
             mask &= (df['total_market_cap'] >= 2e9) | (df['total_market_cap'].isna())

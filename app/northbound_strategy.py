@@ -420,7 +420,7 @@ class NorthboundStrategy:
 
                 if not name or 'ST' in name or '退' in name:
                     continue
-                if code.startswith('8'):
+                if not code[:2] in ('00', '30', '60'):
                     continue
                 if price <= 0:
                     continue
