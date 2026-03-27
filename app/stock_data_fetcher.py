@@ -283,43 +283,43 @@ class StockDataFetcher:
             # 若失败则 fallback 到全市场行情
             if not metrics:
                 try:
-                try:
-                    from market_data_provider import get_realtime_quotes
-                except ImportError:
-                    from app.market_data_provider import get_realtime_quotes
+                    try:
+                        from market_data_provider import get_realtime_quotes
+                    except ImportError:
+                        from app.market_data_provider import get_realtime_quotes
 
-                df = get_realtime_quotes()
-                if df is not None and not df.empty:
-                    row = df[df['代码'] == stock_code]
-                    if not row.empty:
-                        r = row.iloc[0]
-                        metrics["pe_ttm"] = round(float(r.get("市盈率-动态", 0) or 0), 2)
-                        metrics["pb"] = round(float(r.get("市净率", 0) or 0), 2)
-                        metrics["current_price"] = round(float(r.get("最新价", 0) or 0), 2)
-                        metrics["change_pct"] = round(float(r.get("涨跌幅", 0) or 0), 2)
-                        metrics["turnover_rate"] = round(float(r.get("换手率", 0) or 0), 2)
-                        metrics["amount"] = float(r.get("成交额", 0) or 0)
-                        if "量比" in r:
-                            metrics["volume_ratio"] = round(float(r.get("量比", 0) or 0), 2)
-                        if "总市值" in r and r.get("总市值"):
-                            cap = float(r["总市值"])
-                            if cap > 1e12:
-                                metrics["total_market_cap"] = f"{cap/1e12:.2f}万亿"
-                            elif cap > 1e8:
-                                metrics["total_market_cap"] = f"{cap/1e8:.2f}亿"
-                            else:
-                                metrics["total_market_cap"] = str(cap)
-                        if "流通市值" in r and r.get("流通市值"):
-                            fcap = float(r["流通市值"])
-                            if fcap > 1e12:
-                                metrics["float_market_cap"] = f"{fcap/1e12:.2f}万亿"
-                            elif fcap > 1e8:
-                                metrics["float_market_cap"] = f"{fcap/1e8:.2f}亿"
-                            else:
-                                metrics["float_market_cap"] = str(fcap)
+                    df = get_realtime_quotes()
+                    if df is not None and not df.empty:
+                        row = df[df['代码'] == stock_code]
+                        if not row.empty:
+                            r = row.iloc[0]
+                            metrics["pe_ttm"] = round(float(r.get("市盈率-动态", 0) or 0), 2)
+                            metrics["pb"] = round(float(r.get("市净率", 0) or 0), 2)
+                            metrics["current_price"] = round(float(r.get("最新价", 0) or 0), 2)
+                            metrics["change_pct"] = round(float(r.get("涨跌幅", 0) or 0), 2)
+                            metrics["turnover_rate"] = round(float(r.get("换手率", 0) or 0), 2)
+                            metrics["amount"] = float(r.get("成交额", 0) or 0)
+                            if "量比" in r:
+                                metrics["volume_ratio"] = round(float(r.get("量比", 0) or 0), 2)
+                            if "总市值" in r and r.get("总市值"):
+                                cap = float(r["总市值"])
+                                if cap > 1e12:
+                                    metrics["total_market_cap"] = f"{cap/1e12:.2f}万亿"
+                                elif cap > 1e8:
+                                    metrics["total_market_cap"] = f"{cap/1e8:.2f}亿"
+                                else:
+                                    metrics["total_market_cap"] = str(cap)
+                            if "流通市值" in r and r.get("流通市值"):
+                                fcap = float(r["流通市值"])
+                                if fcap > 1e12:
+                                    metrics["float_market_cap"] = f"{fcap/1e12:.2f}万亿"
+                                elif fcap > 1e8:
+                                    metrics["float_market_cap"] = f"{fcap/1e8:.2f}亿"
+                                else:
+                                    metrics["float_market_cap"] = str(fcap)
 
-                        logger.info("Key metrics from realtime quotes", stock_code=stock_code,
-                                   pe=metrics.get("pe_ttm"), pb=metrics.get("pb"))
+                            logger.info("Key metrics from realtime quotes", stock_code=stock_code,
+                                       pe=metrics.get("pe_ttm"), pb=metrics.get("pb"))
                 except Exception as e:
                     logger.warning("market_data_provider failed for key metrics", error=str(e))
 
