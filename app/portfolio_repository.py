@@ -1365,18 +1365,31 @@ class PortfolioRepository:
             logger.error("Failed to add watchlist item", code=stock_code, error=str(e))
             return None
 
-    async def get_watchlist(self, user_id: str = "admin", status: int = 1) -> List[Dict]:
-        """获取自选列表"""
+    async def get_watchlist(self, user_id: str = None, status: int = 1) -> List[Dict]:
+        """获取自选列表
+
+        Args:
+            user_id: 用户ID，None 表示查询所有用户（调度器全局扫描时使用）
+            status: 状态 1=持仓中
+        """
         await self._ensure_watchlist_tables()
         pool = await self._get_pool()
         try:
             async with pool.acquire() as conn:
                 async with conn.cursor(aiomysql.DictCursor) as cur:
-                    await cur.execute("""
-                        SELECT * FROM combined_watchlist
-                        WHERE user_id=%s AND status=%s
-                        ORDER BY updated_at DESC
-                    """, (user_id, status))
+                    if user_id is None:
+                        # 调度器全局扫描：查询所有用户的自选
+                        await cur.execute("""
+                            SELECT * FROM combined_watchlist
+                            WHERE status=%s
+                            ORDER BY updated_at DESC
+                        """, (status,))
+                    else:
+                        await cur.execute("""
+                            SELECT * FROM combined_watchlist
+                            WHERE user_id=%s AND status=%s
+                            ORDER BY updated_at DESC
+                        """, (user_id, status))
                     rows = await cur.fetchall()
                     result = []
                     for row in rows:

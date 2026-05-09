@@ -80,6 +80,8 @@ VP_PREMARKET_START    = dtime(2, 30)     # 量价关系 02:30
 VP_PREMARKET_END      = dtime(3, 0)
 MA_PREMARKET_START    = dtime(4, 0)      # 均线战法 04:00
 MA_PREMARKET_END      = dtime(4, 30)
+NB_PREMARKET_START    = dtime(5, 0)      # 北向资金 05:00
+NB_PREMARKET_END      = dtime(5, 30)
 TM_PREMARKET_START    = dtime(5, 30)     # 趋势动量 05:30
 TM_PREMARKET_END      = dtime(6, 0)
 
@@ -132,6 +134,12 @@ ED_TRADE_END     = dtime(10, 20)
 # 龙头战法  10:15-10:40  涨停板确认后综合判断
 DH_TRADE_START   = dtime(10, 15)
 DH_TRADE_END     = dtime(10, 40)
+
+# 龙头战法下午  13:20-13:40  上午未成交时的补救窗口
+DH_TRADE_PM_START = dtime(13, 20)
+DH_TRADE_PM_END   = dtime(13, 40)
+DH_FOLLOW_PM_START = dtime(13, 40)
+DH_FOLLOW_PM_END   = dtime(14, 0)
 
 # 突破战法  10:15-10:35  凌晨推荐+盘中突破双重确认（与龙头错开15分）
 BT_TRADE_START   = dtime(10, 20)
@@ -296,6 +304,7 @@ class PortfolioScheduler:
         self._last_tm_follow_am = None
         self._last_tm_follow_pm = None
         # 北向资金
+        self._last_nb_premarket = None
         self._last_nb_rec_am = None
         self._last_nb_rec_pm = None
         self._last_nb_trade_am = None
@@ -499,6 +508,8 @@ class PortfolioScheduler:
 
                 elif strategy_type == "northbound":
                     if has_trades:
+                        # 北向资金有交易记录说明凌晨预生成已完成
+                        self._last_nb_premarket = today
                         if now_time >= NB_TRADE_START:
                             self._last_nb_rec_am = today
                             self._last_nb_trade_am = today
@@ -724,6 +735,14 @@ class PortfolioScheduler:
                     await self._run_recommendation("moving_average", "premarket")
                     self._last_ma_premarket = today
 
+                # 05:00 北向资金
+                if (NB_PREMARKET_START <= ct <= NB_PREMARKET_END
+                        and getattr(self, "_last_nb_premarket", None) != today
+                        and _is_trading_day()):
+                    logger.info("=== 北向资金凌晨预生成 ===", date=today)
+                    await self._run_recommendation("northbound", "premarket")
+                    self._last_nb_premarket = today
+
                 # 05:30 趋势动量
                 if (TM_PREMARKET_START <= ct <= TM_PREMARKET_END
                         and self._last_tm_premarket != today
@@ -860,9 +879,11 @@ class PortfolioScheduler:
 
                     # ===================== 10:50 量价关系 — 单次交易 =====================
                     if "volume_price" in ACTIVE_STRATEGIES:
+                        # 前置条件：凌晨预生成 OR 下午推荐（fallback，防止调度器凌晨未运行）
+                        _vp_ready = (self._last_vp_premarket == today or self._last_vp_rec_pm == today)
                         if (VP_TRADE_START <= ct <= VP_TRADE_END
                                 and self._last_vp_trade_am != today
-                                and self._last_vp_premarket == today):
+                                and _vp_ready):
                             logger.info("=== 量价关系交易（凌晨推荐+盘中确认）===", date=today)
                             await self._run_strategy_trade("volume_price", "morning")
                             self._last_vp_trade_am = today
@@ -876,9 +897,11 @@ class PortfolioScheduler:
 
                     # ===================== 11:15 均线战法 — 单次交易 =====================
                     if "moving_average" in ACTIVE_STRATEGIES:
+                        # 前置条件：凌晨预生成 OR 下午推荐（fallback，防止调度器凌晨未运行）
+                        _ma_ready = (self._last_ma_premarket == today or self._last_ma_rec_pm == today)
                         if (MA_TRADE_START <= ct <= MA_TRADE_END
                                 and self._last_ma_trade_am != today
-                                and self._last_ma_premarket == today):
+                                and _ma_ready):
                             logger.info("=== 均线战法交易（凌晨推荐+均线确认）===", date=today)
                             await self._run_strategy_trade("moving_average", "morning")
                             self._last_ma_trade_am = today
@@ -919,7 +942,13 @@ class PortfolioScheduler:
                             await self._run_recommendation("trend_momentum", "afternoon")
                             self._last_tm_rec_pm = today
 
-                    # 13:05 龙头战法下午推荐（已移除）
+                    # 13:05 龙头战法下午推荐（已恢复 — 为下午交易提供数据）
+                    if "dragon_head" in ACTIVE_STRATEGIES:
+                        if (DH_RECOMMEND_PM_START <= ct <= DH_RECOMMEND_PM_END
+                                and self._last_dh_rec_pm != today):
+                            logger.info("=== 龙头战法下午推荐 ===", date=today)
+                            await self._run_recommendation("dragon_head", "afternoon")
+                            self._last_dh_rec_pm = today
 
                     # 13:05 突破战法下午推荐
                     if "breakthrough" in ACTIVE_STRATEGIES:
@@ -963,11 +992,33 @@ class PortfolioScheduler:
                             await self._run_recommendation("northbound", "afternoon")
                             self._last_nb_rec_pm = today
 
+                    # ===================== 13:20 龙头战法下午交易（补救窗口）=====================
+                    if "dragon_head" in ACTIVE_STRATEGIES:
+                        # 前置条件：上午推荐 OR 下午推荐完成，且上午未交易
+                        _dh_ready = (self._last_dh_rec_am == today or self._last_dh_rec_pm == today)
+                        if (DH_TRADE_PM_START <= ct <= DH_TRADE_PM_END
+                                and self._last_dh_trade_am != today
+                                and _dh_ready):
+                            logger.info("=== 龙头战法下午补救交易 ===", date=today)
+                            await self._run_strategy_trade("dragon_head", "afternoon")
+                            self._last_dh_trade_am = today  # 复用 AM 标志，确保每日只交易一次
+
+                        if (DH_FOLLOW_PM_START <= ct <= DH_FOLLOW_PM_END
+                                and self._last_dh_follow_am != today
+                                and self._last_dh_trade_am == today):
+                            logger.info("=== 龙头战法下午跟投建议 ===", date=today)
+                            await self._run_follow_recommendation("dragon_head", "afternoon")
+                            self._last_dh_follow_am = today  # 复用 AM 标志
+
                     # ===================== 13:35 北向资金 — 单次交易 =====================
                     if "northbound" in ACTIVE_STRATEGIES:
+                        # 前置条件：凌晨预生成 OR 下午推荐（fallback）
+                        _nb_ready = (getattr(self, "_last_nb_premarket", None) == today
+                                     or self._last_nb_rec_pm == today
+                                     or self._last_nb_rec_am == today)
                         if (NB_TRADE_START <= ct <= NB_TRADE_END
                                 and self._last_nb_trade_am != today
-                                and (self._last_nb_rec_pm == today or self._last_nb_rec_am == today)):
+                                and _nb_ready):
                             logger.info("=== 北向资金交易（下午外资数据充分）===", date=today)
                             await self._run_strategy_trade("northbound", "afternoon")
                             self._last_nb_trade_am = today
@@ -987,11 +1038,13 @@ class PortfolioScheduler:
                             await self._run_recommendation("combined", "afternoon")
                             self._last_cb_rec_pm = today
 
-                    # ===================== 14:10 综合战法 — 单次交易（最后窗口）=====================
+                    # ===================== 14:50 综合战法 — 单次交易（最后窗口）=====================
                     if "combined" in ACTIVE_STRATEGIES:
+                        # 前置条件：下午聚合推荐 OR 上午推荐（fallback）
+                        _cb_ready = (self._last_cb_rec_pm == today or self._last_cb_rec_am == today)
                         if (CB_TRADE_START <= ct <= CB_TRADE_END
                                 and self._last_cb_trade_am != today
-                                and (self._last_cb_rec_pm == today or self._last_cb_rec_am == today)):
+                                and _cb_ready):
                             logger.info("=== 综合战法交易（所有战法聚合，14:30前结束）===", date=today)
                             await self._run_strategy_trade("combined", "afternoon")
                             self._last_cb_trade_am = today

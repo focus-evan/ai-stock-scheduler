@@ -294,7 +294,12 @@ class PortfolioManager:
                 portfolio = await self.repo.get_portfolio(portfolio_id)
 
             # 2. 获取最新推荐
-            new_recs = await self._get_recommendations(strategy_type)
+            # 龙头战法特殊处理：推荐列表是当日涨停股（不可买入），
+            # 交易时应使用前日推荐（昨日涨停龙头，今日回踩低吸）
+            if strategy_type == "dragon_head":
+                new_recs = await self._get_previous_day_recommendations(strategy_type)
+            else:
+                new_recs = await self._get_recommendations(strategy_type)
 
             # 2.5 获取前一日复盘（传给GPT，让交易决策参考之前的教训）
             last_review = await self.repo.get_latest_review(portfolio_id)
@@ -1031,6 +1036,44 @@ class PortfolioManager:
             logger.error("Failed to get recommendations",
                          strategy=strategy_type, error=str(e))
             return []
+
+    async def _get_previous_day_recommendations(self, strategy_type: str) -> List[Dict]:
+        """
+        获取前一交易日的推荐缓存（龙头战法专用）
+
+        龙头战法推荐的是当日涨停股，这些股票当日不可买入（涨停封板）。
+        交易时应使用前一交易日的推荐（昨日涨停龙头，今日可能回踩低吸），
+        这符合龙头战法的核心逻辑："不追涨停，等次日回踩5日线介入"。
+
+        向前搜索 1~5 天的推荐缓存（自动跳过周末和无数据的日期）。
+        """
+        try:
+            today = _beijing_now().strftime("%Y-%m-%d")
+            for days_back in range(1, 6):
+                prev_date = (_beijing_now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                # 通过 include_meta 获取实际日期，防止 fallback 回今天的缓存
+                meta = await self.repo.get_recommendation_cache(
+                    strategy_type, trading_date=prev_date, include_meta=True
+                )
+                if not meta or not meta.get("stocks"):
+                    continue
+                actual_date = str(meta.get("trading_date", ""))
+                if actual_date == today:
+                    # 跳过今天的缓存（get_recommendation_cache 的 fallback 可能返回今天的）
+                    continue
+                logger.info("Using previous day recommendations for dragon_head trading",
+                            prev_date=actual_date, count=len(meta["stocks"]))
+                return meta["stocks"]
+
+            # 所有历史日期都无缓存，降级使用今天的推荐
+            logger.warning("No previous day recommendations found, fallback to today",
+                           strategy=strategy_type)
+            return await self._get_recommendations(strategy_type)
+
+        except Exception as e:
+            logger.error("Failed to get previous day recommendations",
+                         strategy=strategy_type, error=str(e))
+            return await self._get_recommendations(strategy_type)
 
     async def _realtime_recommendations(self, strategy_type: str) -> List[Dict]:
         """实时获取推荐（仅在缓存未就绪时作为降级方案）"""
