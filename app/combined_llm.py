@@ -18,7 +18,7 @@ import structlog
 logger = structlog.get_logger()
 
 LLM_BASE_URL = os.getenv("DRAGON_LLM_BASE_URL", "https://api.wxznb.cn")
-LLM_MODEL = os.getenv("DRAGON_LLM_MODEL", "gpt-5.4")
+LLM_MODEL = os.getenv("DRAGON_LLM_MODEL", "gpt-5.5")
 DRAGON_LLM_API_KEY = os.getenv("DRAGON_LLM_API_KEY", "")
 
 

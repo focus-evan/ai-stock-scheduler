@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 
 # GPT-5.2 API 配置（复用龙头战法的代理配置）
 EVENT_LLM_BASE_URL = os.getenv("DRAGON_LLM_BASE_URL", "https://api.wxznb.cn")
-EVENT_LLM_MODEL = os.getenv("DRAGON_LLM_MODEL", "gpt-5.4")
+EVENT_LLM_MODEL = os.getenv("DRAGON_LLM_MODEL", "gpt-5.5")
 EVENT_LLM_PROVIDER = os.getenv("DRAGON_LLM_PROVIDER", "openai")
 DRAGON_LLM_API_KEY = os.getenv("DRAGON_LLM_API_KEY", "")
 
