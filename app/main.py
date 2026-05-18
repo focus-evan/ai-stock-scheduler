@@ -269,6 +269,65 @@ async def trigger_watchlist_guidance(
         raise HTTPException(500, str(e))
 
 
+# ==================== 产业景气拐点 ====================
+
+@app.post("/api/industry/run-indicator/{indicator_code}", summary="触发单指标抓取与信号计算")
+async def run_industry_indicator(indicator_code: str = PathParam(...)):
+    try:
+        from industry_inflection_scheduler import industry_inflection_scheduler
+    except ImportError:
+        from app.industry_inflection_scheduler import industry_inflection_scheduler
+
+    try:
+        return await industry_inflection_scheduler.run_indicator(indicator_code)
+    except Exception as e:
+        logger.error("Run industry indicator failed", indicator_code=indicator_code, error=str(e))
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/industry/run-tech/{tech_code}", summary="触发单产业共振计算")
+async def run_industry_tech(tech_code: str = PathParam(...)):
+    try:
+        from industry_inflection_scheduler import industry_inflection_scheduler
+    except ImportError:
+        from app.industry_inflection_scheduler import industry_inflection_scheduler
+
+    try:
+        result = await industry_inflection_scheduler.run_tech(tech_code)
+        return {"status": "success", "data": result}
+    except Exception as e:
+        logger.error("Run industry tech failed", tech_code=tech_code, error=str(e))
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/industry/run-frequency/{frequency}", summary="按频率触发产业指标批量抓取")
+async def run_industry_frequency(frequency: str = PathParam(...)):
+    try:
+        from industry_inflection_scheduler import industry_inflection_scheduler
+    except ImportError:
+        from app.industry_inflection_scheduler import industry_inflection_scheduler
+
+    try:
+        return await industry_inflection_scheduler.run_frequency(frequency)
+    except Exception as e:
+        logger.error("Run industry frequency failed", frequency=frequency, error=str(e))
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/industry/status", summary="产业景气任务状态")
+async def get_industry_status():
+    try:
+        from industry_inflection_scheduler import industry_inflection_scheduler
+    except ImportError:
+        from app.industry_inflection_scheduler import industry_inflection_scheduler
+
+    try:
+        return {"status": "success", "data": await industry_inflection_scheduler.get_status()}
+    except Exception as e:
+        logger.error("Get industry status failed", error=str(e))
+        raise HTTPException(500, str(e))
+
+
 # ==================== Startup & Shutdown ====================
 
 @app.on_event("startup")
